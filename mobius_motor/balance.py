@@ -1,11 +1,8 @@
 # mobius_motor/balance.py
-# Λ-Balance – menține homeostaza sistemului (PID simplificat)
+# Λ-Balance – menținere homeostază (PID-like control pentru valoarea Λ)
 
 from __future__ import annotations
-from typing import Dict, Tuple
-import math
-
-# Refolosim motorul existent
+from typing import Dict, List, Tuple
 from mobius_motor.core import motor_step
 
 def balance_step(
@@ -14,45 +11,46 @@ def balance_step(
     U: float,
     theta: float,
     target_value: float,
-    kp: float = 0.4,
-    ki: float = 0.1,
-    kd: float = 0.05,
-    iters: int = 100,
+    iters: int = 200,
+    lr: float = 0.05,   # rate de învățare
 ) -> Dict[str, object]:
     """
-    PID simplificat pentru a stabiliza valoarea Λ în jurul lui `target_value`.
-    - kp, ki, kd = coeficienți de control (proporțional, integral, derivativ).
-    - iters = câte iterații rulează bucla de stabilizare.
-    Returnează ultima valoare și istoricul complet.
+    Ajustează parametrii (k, P, U) iterativ astfel încât Λ ≈ target_value.
+    Folosește un control simplu tip gradient descent/PID.
+
+    Returnează:
+      - final_value: valoarea Λ obținută
+      - params_final: dict cu k, P, U finale
+      - history: listă de tuple (val, st)
     """
-    integral = 0.0
-    prev_err = 0.0
-    history: list[Tuple[float, float, int]] = []
+    history: List[Tuple[float, int]] = []
+    best_val, best_params = None, (k, P, U)
 
-    for t in range(1, iters + 1):
+    for _ in range(iters):
         val, st = motor_step(k=k, P=P, U=U, theta=theta)
-        err = target_value - val
-        integral += err
-        deriv = err - prev_err
+        history.append((val, st))
 
-        adjust = kp * err + ki * integral + kd * deriv
+        # dacă este cea mai bună valoare până acum
+        if best_val is None or abs(val - target_value) < abs(best_val - target_value):
+            best_val = val
+            best_params = (k, P, U)
 
-        # reglăm doar P (paralelism) pentru simplitate
-        P = max(0.1, P + adjust)
+        # eroare față de țintă
+        error = target_value - val
 
-        prev_err = err
-        history.append((val, P, st))
+        # update simplu PID-like → corecție proporțională
+        k += lr * error * 0.1
+        P += lr * error * 0.05
+        U += lr * error * 0.01
 
-        # stabilizat suficient de aproape
-        if abs(err) < 1e-4:
-            break
+        # limite minime (nu vrem valori negative sau zero)
+        k = max(0.1, k)
+        P = max(0.1, P)
+        U = max(1.0, U)
 
+    k, P, U = best_params
     return {
-        "final_value": float(val),
-        "final_state": int(st),
+        "final_value": float(best_val),
         "params_final": {"k": k, "P": P, "U": U},
-        "error": float(err),
-        "iters": t,
         "history": history,
-        "target": target_value,
     }

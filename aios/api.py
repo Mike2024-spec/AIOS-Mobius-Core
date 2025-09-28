@@ -7,11 +7,13 @@ from mobius_motor.arbiter import phi_arbiter   # import corect, fără duplicat
 
 app = FastAPI(title="Λ-Möbius Core API", version="0.1.0")
 
+
 class StepInput(BaseModel):
     k: float
     P: float
     U: float
     theta: float
+
 
 class OptimizeInput(BaseModel):
     k: float = 1.0
@@ -21,6 +23,7 @@ class OptimizeInput(BaseModel):
     mode: str  # "value" or "state"
     target: float | None = None
     desired_state: int | None = None
+
 
 @app.post("/step")
 def api_step(inp: StepInput):
@@ -32,6 +35,7 @@ def api_step(inp: StepInput):
         "state": st,
         "state_desc": state_desc,
     }
+
 
 @app.post("/optimize")
 def api_optimize(inp: OptimizeInput):
